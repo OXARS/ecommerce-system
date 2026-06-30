@@ -1,45 +1,20 @@
 package main
 
 import (
-	"ecommerce-system/controllers"
-	"ecommerce-system/middleware"
-	"ecommerce-system/models"
+	"fmt"
+	"log"
+
 	"ecommerce-system/routes"
-	"ecommerce-system/services"
 )
 
 func main() {
+	router := routes.SetupRouter()
 
-	routes.StartRoutes()
-	middleware.Validate()
+	fmt.Println("Servidor e-commerce iniciado")
+	fmt.Println("Dirección: http://localhost:8080")
+	fmt.Println("Servicio de prueba: http://localhost:8080/api/health")
 
-	productService := services.ProductService{}
-	userService := services.UserService{}
-
-	productController := controllers.ProductController{
-		Service: productService,
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("No fue posible iniciar el servidor: ", err)
 	}
-
-	userController := controllers.UserController{
-		Service: userService,
-	}
-
-	product := models.Product{
-		ID:          1,
-		Name:        "Laptop",
-		Description: "Laptop Gamer",
-		Price:       1200.50,
-		Stock:       5,
-	}
-
-	user := models.User{
-		ID:       1,
-		Name:     "Oscar",
-		Email:    "oscar@gmail.com",
-		Password: "123456",
-		Role:     "Admin",
-	}
-
-	productController.AddProduct(product)
-	userController.AddUser(user)
 }

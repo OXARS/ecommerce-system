@@ -1,8 +1,19 @@
 package routes
 
-import "fmt"
+import (
+	"ecommerce-system/controllers"
 
-// StartRoutes simula el inicio de rutas
-func StartRoutes() {
-	fmt.Println("Rutas del sistema iniciadas")
+	"github.com/gin-gonic/gin"
+)
+
+// SetupRouter configura y devuelve todas las rutas de la aplicación.
+func SetupRouter() *gin.Engine {
+	router := gin.Default()
+
+	api := router.Group("/api")
+	{
+		api.GET("/health", controllers.Health)
+	}
+
+	return router
 }
