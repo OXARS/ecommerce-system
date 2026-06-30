@@ -65,6 +65,7 @@ func (pc *ProductController) GetProducts(c *gin.Context) {
 // GetProductByID busca un producto mediante el ID de la URL.
 func (pc *ProductController) GetProductByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
+
 	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "El ID debe ser un número entero positivo",
@@ -73,9 +74,17 @@ func (pc *ProductController) GetProductByID(c *gin.Context) {
 	}
 
 	product, err := pc.Service.GetProductByID(id)
-	if err != nil {
+
+	if errors.Is(err, services.ErrProductNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
+		})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "No fue posible consultar el producto",
 		})
 		return
 	}
@@ -88,6 +97,7 @@ func (pc *ProductController) GetProductByID(c *gin.Context) {
 // UpdateProduct actualiza un producto existente.
 func (pc *ProductController) UpdateProduct(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
+
 	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "El ID debe ser un número entero positivo",
@@ -106,6 +116,7 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 	}
 
 	updatedProduct, err := pc.Service.UpdateProduct(id, product)
+
 	if errors.Is(err, services.ErrProductNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
@@ -129,6 +140,7 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 // DeleteProduct elimina un producto existente.
 func (pc *ProductController) DeleteProduct(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
+
 	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "El ID debe ser un número entero positivo",
@@ -137,6 +149,7 @@ func (pc *ProductController) DeleteProduct(c *gin.Context) {
 	}
 
 	err = pc.Service.DeleteProduct(id)
+
 	if errors.Is(err, services.ErrProductNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
@@ -153,5 +166,37 @@ func (pc *ProductController) DeleteProduct(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Producto eliminado correctamente",
+	})
+}
+
+// GetInventory devuelve el stock actual de todos los productos.
+func (pc *ProductController) GetInventory(c *gin.Context) {
+	type InventoryItem struct {
+		ID        int    `json:"id"`
+		Name      string `json:"name"`
+		Stock     int    `json:"stock"`
+		Available bool   `json:"available"`
+	}
+
+	products := pc.Service.GetProducts()
+
+	inventory := make(
+		[]InventoryItem,
+		0,
+		len(products),
+	)
+
+	for _, product := range products {
+		inventory = append(inventory, InventoryItem{
+			ID:        product.ID,
+			Name:      product.Name,
+			Stock:     product.Stock,
+			Available: product.Stock > 0,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total": len(inventory),
+		"data":  inventory,
 	})
 }

@@ -8,8 +8,14 @@ import (
 	"ecommerce-system/models"
 )
 
-// ErrProductNotFound se devuelve cuando no existe el producto solicitado.
-var ErrProductNotFound = errors.New("producto no encontrado")
+// Errores propios del módulo de productos.
+var (
+	// ErrProductNotFound se devuelve cuando no existe el producto solicitado.
+	ErrProductNotFound = errors.New("producto no encontrado")
+
+	// ErrInsufficientStock se devuelve cuando no existen unidades suficientes.
+	ErrInsufficientStock = errors.New("stock insuficiente")
+)
 
 // ProductService administra los productos guardados en memoria.
 type ProductService struct {
@@ -33,7 +39,9 @@ func validateProduct(product models.Product) error {
 	}
 
 	if strings.TrimSpace(product.Description) == "" {
-		return errors.New("la descripción del producto es obligatoria")
+		return errors.New(
+			"la descripción del producto es obligatoria",
+		)
 	}
 
 	if product.Price <= 0 {
@@ -59,6 +67,9 @@ func (ps *ProductService) CreateProduct(
 	// cuando varias solicitudes crean productos simultáneamente.
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+
+	product.Name = strings.TrimSpace(product.Name)
+	product.Description = strings.TrimSpace(product.Description)
 
 	product.ID = ps.nextID
 	ps.nextID++
@@ -110,6 +121,13 @@ func (ps *ProductService) UpdateProduct(
 	for index, product := range ps.products {
 		if product.ID == id {
 			updatedProduct.ID = id
+			updatedProduct.Name = strings.TrimSpace(
+				updatedProduct.Name,
+			)
+			updatedProduct.Description = strings.TrimSpace(
+				updatedProduct.Description,
+			)
+
 			ps.products[index] = updatedProduct
 
 			return updatedProduct, nil
@@ -136,4 +154,83 @@ func (ps *ProductService) DeleteProduct(id int) error {
 	}
 
 	return ErrProductNotFound
+}
+
+// ReserveStock valida y descuenta de manera segura el stock de un pedido.
+func (ps *ProductService) ReserveStock(
+	items []models.OrderItem,
+) ([]models.OrderItem, float64, error) {
+	if len(items) == 0 {
+		return nil, 0, errors.New(
+			"el pedido debe contener al menos un producto",
+		)
+	}
+
+	// Solo una solicitud puede modificar el inventario a la vez.
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	// Agrupa las cantidades cuando un producto se repite.
+	quantities := make(map[int]int)
+
+	for _, item := range items {
+		if item.ProductID <= 0 || item.Quantity <= 0 {
+			return nil, 0, errors.New(
+				"el producto y la cantidad deben ser mayores que cero",
+			)
+		}
+
+		quantities[item.ProductID] += item.Quantity
+	}
+
+	// Guarda la posición de cada producto dentro del inventario.
+	productIndexes := make(map[int]int)
+
+	for index, product := range ps.products {
+		productIndexes[product.ID] = index
+	}
+
+	// Primero comprueba que todos los productos existan
+	// y tengan suficiente stock.
+	for productID, quantity := range quantities {
+		index, exists := productIndexes[productID]
+
+		if !exists {
+			return nil, 0, ErrProductNotFound
+		}
+
+		if ps.products[index].Stock < quantity {
+			return nil, 0, ErrInsufficientStock
+		}
+	}
+
+	// Como todas las validaciones fueron correctas,
+	// descuenta el stock de cada producto.
+	for productID, quantity := range quantities {
+		index := productIndexes[productID]
+		ps.products[index].Stock -= quantity
+	}
+
+	reservedItems := make(
+		[]models.OrderItem,
+		0,
+		len(items),
+	)
+
+	total := 0.0
+
+	// Calcula el precio unitario y subtotal de cada elemento.
+	for _, item := range items {
+		index := productIndexes[item.ProductID]
+		product := ps.products[index]
+
+		item.UnitPrice = product.Price
+		item.Subtotal = product.Price * float64(item.Quantity)
+
+		total += item.Subtotal
+
+		reservedItems = append(reservedItems, item)
+	}
+
+	return reservedItems, total, nil
 }
