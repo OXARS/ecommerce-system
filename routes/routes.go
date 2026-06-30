@@ -11,12 +11,14 @@ import (
 func SetupRouter() *gin.Engine {
 	router := gin.Default()
 
-	// Se crea una sola instancia compartida del servicio.
 	productService := services.NewProductService()
-
-	// El controlador recibe el servicio mediante su interfaz.
 	productController := controllers.NewProductController(
 		productService,
+	)
+
+	userService := services.NewUserService()
+	userController := controllers.NewUserController(
+		userService,
 	)
 
 	api := router.Group("/api")
@@ -30,6 +32,13 @@ func SetupRouter() *gin.Engine {
 			products.GET("/:id", productController.GetProductByID)
 			products.PUT("/:id", productController.UpdateProduct)
 			products.DELETE("/:id", productController.DeleteProduct)
+		}
+
+		users := api.Group("/users")
+		{
+			users.POST("", userController.Register)
+			users.GET("", userController.GetUsers)
+			users.GET("/:id", userController.GetUserByID)
 		}
 	}
 
